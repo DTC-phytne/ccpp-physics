@@ -48,18 +48,15 @@
 
       real(kind=kind_phys) :: gcvalmx,epsilon,ZZ,cvg,mcon,buy2,   &
                           fdqb,dtdyn,dxlim,rmulacvg,tem,     &
-                          DEN,betascu,betadcu,dp1,invdelt,   &
-                          sigmaminscu, sigmamindcu
+                          DEN,betascu,betadcu,dp1,invdelt
 
      !Parameters
       gcvalmx = 0.1
       rmulacvg=10.
       epsilon=1.E-11
       km1=km-1
-      betadcu = 3.5
+      betadcu = 1.5
       betascu = 5.2
-      sigmaminscu = 0.03
-      sigmamindcu = 0.01
       invdelt = 1./delt
 
      !Initialization 2D
@@ -220,14 +217,14 @@
          do i= 1, im
             if(cnvflg(i)) then
                sigmab(i)=sigmab(i)/betascu
-               sigmab(i)=MAX(sigmaminscu,sigmab(i))
+               sigmab(i)=MAX(0.01,sigmab(i))
             endif
          enddo
       else
          do i= 1, im
             if(cnvflg(i)) then
                sigmab(i)=sigmab(i)/betadcu
-               sigmab(i)=MAX(sigmamindcu,sigmab(i))
+               sigmab(i)=MAX(0.01,sigmab(i))
             endif
          enddo
       endif
