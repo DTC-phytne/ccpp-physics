@@ -50,13 +50,14 @@
 !!  \section det_samfshalcnv GFS samfshalcnv Detailed Algorithm
       subroutine samfshalcnv_run(im,km,itc,ntc,cliq,cp,cvap,            &
      &     eps,epsm1,fv,grav,hvap,rd,rv,                                &
-     &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               &
+     &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               & 
      &     tmf,qmicro,progsigma,                                        &
-     &     prslp,psp,phil,qtr,prevsq,q,q1,t1,u1,v1,fscav,    
+     &     prslp,psp,phil,qtr,prevsq,q,q1,t1,u1,v1,fscav,               &
      &     rn,kbot,ktop,kcnv,islimsk,garea,                             &
      &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,                       &
-     &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                &
-     &     sigmain,sigmaout,errmsg,errflg)!
+     &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                & 
+     &     sigmain,sigmaout,errmsg,errflg)
+!
       use machine , only : kind_phys
       use funcphys , only : fpvs
 
@@ -68,11 +69,10 @@
      &   eps, epsm1, fv, grav, hvap, rd, rv, t0c
       real(kind=kind_phys), intent(in) ::  delt
       real(kind=kind_phys), intent(in) :: psp(:), delp(:,:),            &
-     &  prslp(:,:), garea(:), hpbl(:), dot(:,:), phil(:,:),             &
-     &  qmicro(:,:),tmf(:,:),prevsq(:,:),q(:,:)
+     &   prslp(:,:), garea(:), hpbl(:), dot(:,:), phil(:,:),            &
+     &   qmicro(:,:),tmf(:,:),prevsq(:,:),q(:,:)
 
       real(kind=kind_phys), intent(in) :: sigmain(:,:)
-
 !
       real(kind=kind_phys), dimension(:), intent(in) :: fscav
       integer, intent(inout)  :: kcnv(:)
@@ -160,9 +160,7 @@ cc
      &                     omegac(im),zeta(im,km),dbyo1(im,km),
      &                     sigmab(im)
       real(kind=kind_phys) gravinv,dxcrtas
-
       logical flag_shallow
-
 c  physical parameters
 !     parameter(g=grav,asolfac=0.89)
 !     parameter(g=grav)
@@ -190,7 +188,7 @@ c  physical parameters
       parameter(cinacrmx=-120.,shevf=2.0)
       parameter(dtmax=10800.,dtmin=600.)
       parameter(bet1=1.875,cd1=.506,f1=2.0,gam1=.5)
-      parameter(betaw=.03,dxcrt=15.e3,dxcrtc0=9.e3)
+      parameter(betaw=.03,dxcrtc0=9.e3)
       parameter(h1=0.33333333)
 !  progsigma
       parameter(dxcrtas=30.e3)
@@ -258,6 +256,12 @@ c-----------------------------------------------------------------------
 
       if (.not.hwrf_samfshal) then
              cinacrmn=-80.
+      endif
+
+      if (progsigma) then
+         dxcrt=10.e3
+      else
+         dxcrt=15.e3
       endif
 
 c-----------------------------------------------------------------------
@@ -338,6 +342,7 @@ c
        enddo
       endif
 !!
+
 !>  - Return to the calling routine if deep convection is present or the surface buoyancy flux is negative.
       totflg = .true.
       do i=1,im
@@ -514,6 +519,7 @@ c
       do i = 1,im
          omegac(i)=0.
       enddo
+
       do k = 1, km
          do i = 1, im
             dbyo1(i,k)=0.
@@ -1472,7 +1478,7 @@ c
         enddo
       enddo
 !
-      if(progsigma)then                
+      if(progsigma)then                                                                                                                               
           do k = 2, km1
             do i = 1, im
                if (cnvflg(i)) then
@@ -1517,8 +1523,8 @@ c
         endif
       enddo
 c
-!> - Calculate the mean updraft velocity in pressure coordinates within the cloud (wc).                                                                                        
-      if(progsigma)then                                               
+!> - For progsigma =T, calculate the mean updraft velocity in pressure coordinates within the cloud (wc).                                                                                        
+      if(progsigma)then                                                                                                                               
          do i = 1, im
             omegac(i) = 0.
             sumx(i) = 0.
@@ -1546,8 +1552,8 @@ c
                if (omegac(i) > val) cnvflg(i)=.false.
             endif
          enddo
-c     
-c Compute zeta for prog closure
+
+!> - For progsigma = T, calculate the xi term in Bengtsson et al. 2022 \cite Bengtsson_2022 (equation 8)
          do k = 2, km1
             do i = 1, im
                if (cnvflg(i)) then
@@ -1601,6 +1607,7 @@ c
       enddo
       endif
 c
+     
        do k = 2, km1
         do i = 1, im
            if (cnvflg(i)) then
@@ -1926,7 +1933,7 @@ c
 c  compute cloud base mass flux as a function of the mean
 c     updraft velcoity
 c
-c Prognostic closure
+!> - From Bengtsson et al. (2022) \cite Bengtsson_2022 prognostic closure scheme, equation 8, call progsigma_calc() to compute updraft area fraction based on a moisture budget
       if(progsigma)then
          flag_shallow = .true.
          call progsigma_calc(im,km,first_time_step,restart,flag_shallow,
@@ -1937,6 +1944,7 @@ c Prognostic closure
 
 !> - From Han et al.'s (2017) \cite han_et_al_2017 equation 6, calculate cloud base mass flux as a function of the mean updraft velcoity.
 !!  As discussed in Han et al. (2017) \cite han_et_al_2017 , when dtconv is larger than tauadv, the convective mixing is not fully conducted before the cumulus cloud is advected out of the grid cell. In this case, therefore, the cloud base mass flux is further reduced in proportion to the ratio of tauadv to dtconv.
+
       do i= 1, im
         if(cnvflg(i)) then
           k = kbcon(i)
@@ -1965,7 +1973,6 @@ c Prognostic closure
       do i = 1, im
         if(cnvflg(i)) then
           if (gdx(i) < dxcrt) then
-            scaldfunc(i) = (1.-sigmagfm(i)) * (1.-sigmagfm(i))
              if(progsigma)then
                 scaldfunc(i)=(1.-sigmab(i))*(1.-sigmab(i))
              else
@@ -2448,9 +2455,13 @@ c
             if(k > kb(i) .and. k < ktop(i)) then
               tem = 0.5 * (eta(i,k-1) + eta(i,k)) * xmb(i)
               tem1 = pfld(i,k) * 100. / (rd * t1(i,k))
-              sigmagfm(i) = max(sigmagfm(i), betaw)
-              ptem = tem / (sigmagfm(i) * tem1)
-              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*sigmagfm(i)*ptem*ptem
+              if(progsigma)then
+                tem2 = sigmab(i)
+              else
+                tem2 = max(sigmagfm(i), betaw)
+              endif
+              ptem = tem / (tem2 * tem1)
+              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*tem2*ptem*ptem
             endif
           endif
         enddo

@@ -238,7 +238,7 @@ c  physical parameters
 !     parameter(cinacrmx=-120.,cinacrmn=-120.)
       parameter(cinacrmx=-120.,cinacrmn=-80.)
       parameter(bet1=1.875,cd1=.506,f1=2.0,gam1=.5)
-      parameter(betaw=.03,dxcrtuf=15.e3)
+      parameter(betaw=.03)
 
 !
 !  local variables and arrays
@@ -306,7 +306,6 @@ c    &            .743,.813,.886,.947,1.138,1.377,1.896/
       errflg = 0
 
       gravinv = 1./grav
-
 
       elocp = hvap/cp
       el2orc = hvap*hvap/(rv*cp)
@@ -1620,7 +1619,7 @@ c
 c
       do i = 1, im
         flg(i) = cnvflg(i)
-        ktcon1(i) = kmax(i)
+        ktcon1(i) = ktcon(i)
       enddo
       do k = 2, km1
         do i = 1, im
@@ -1639,8 +1638,11 @@ c
 !             aa2(i) = aa2(i) +
 !!   &                 dz1 * eta(i,k) * grav * fv *
 !    &                 dz1 * grav * fv *
-!    &                 max(val,(qeso(i,k) - qo(i,k)))
-              if(aa2(i) < 0.) then
+!    &                 max(val,(qeso(i,k) - qo(i,k)))        
+!NRL MNM: Limit overshooting not to be deeper than half the actual cloud              
+              tem  = 0.5 * (zi(i,ktcon(i))-zi(i,kbcon(i)))
+              tem1 = zi(i,k)-zi(i,ktcon(i))
+              if(aa2(i) < 0. .or. tem1 >= tem) then
                 ktcon1(i) = k
                 flg(i) = .false.
               endif
@@ -1731,8 +1733,7 @@ c
         enddo
       enddo
 
-
-      if(progsigma)then             
+      if(progsigma)then                                                                                                                                                                   
           do k = 2, km1
             do i = 1, im
                if (cnvflg(i)) then
@@ -1777,8 +1778,9 @@ c
         endif
       enddo
 c
-!> - Calculate the mean updraft velocity within the cloud (wc),cast in pressure coordinates.                                  
-      if(progsigma)then 
+
+!> - For progsigma = T, calculate the mean updraft velocity within the cloud (omegac),cast in pressure coordinates.                                                                                                                                  
+      if(progsigma)then                                                                                                                                                            
          do i = 1, im
             omegac(i) = 0.
             sumx(i) = 0.
@@ -1807,7 +1809,7 @@ c
             endif
          enddo
 
-!> - Calculate the xi term in Bengtsson et al. 2022 (equation 8)
+!> - For progsigma = T, calculate the xi term in Bengtsson et al. 2022 \cite Bengtsson_2022 (equation 8)
          do k = 2, km1
             do i = 1, im
                if (cnvflg(i)) then
@@ -1823,7 +1825,7 @@ c
                endif
             enddo
          enddo
-
+      
 
       endif !if progsigma
 
@@ -2466,8 +2468,10 @@ c
 !
       if(progsigma)then
          dxcrtas=30.e3
+         dxcrtuf=10.e3
       else
          dxcrtas=8.e3
+         dxcrtuf=15.e3
       endif
 
 
@@ -2477,6 +2481,7 @@ c
             asqecflg(i) = .false.
          endif
       enddo
+
 !
 !> - If grid size is larger than the threshold value (i.e., asqecflg=.true.), the quasi-equilibrium assumption is used to obtain the cloud base mass flux. To begin with, calculate the change in the temperature and moisture profiles per unit cloud base mass flux.
       do k = 1, km
@@ -2878,7 +2883,7 @@ c
         endif
       enddo
 
-!> - From Bengtsson et al. (2022) Prognostic closure scheme, equation 8, compute updraft area fraction based on a moisture budget
+!> - From Bengtsson et al. (2022) \cite Bengtsson_2022 prognostic closure scheme, equation 8, call progsigma_calc() to compute updraft area fraction based on a moisture budget
       if(progsigma)then
          flag_shallow = .false.
          call progsigma_calc(im,km,first_time_step,restart,flag_shallow,
@@ -2889,6 +2894,7 @@ c
 
 !> - From Han et al.'s (2017) \cite han_et_al_2017 equation 6, calculate cloud base mass flux as a function of the mean updraft velcoity for the grid sizes where the quasi-equilibrium assumption of Arakawa-Schubert is not valid any longer.
 !!  As discussed in Han et al. (2017) \cite han_et_al_2017 , when dtconv is larger than tauadv, the convective mixing is not fully conducted before the cumulus cloud is advected out of the grid cell. In this case, therefore, the cloud base mass flux is further reduced in proportion to the ratio of tauadv to dtconv.
+
       do i= 1, im
         if(cnvflg(i) .and. .not.asqecflg(i)) then
           k = kbcon(i)
@@ -3515,9 +3521,13 @@ c
             if(k > kb(i) .and. k < ktop(i)) then
               tem = 0.5 * (eta(i,k-1) + eta(i,k)) * xmb(i)
               tem1 = pfld(i,k) * 100. / (rd * t1(i,k))
-              sigmagfm(i) = max(sigmagfm(i), betaw)
-              ptem = tem / (sigmagfm(i) * tem1)
-              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*sigmagfm(i)*ptem*ptem
+              if(progsigma)then
+                tem2 = sigmab(i)
+              else
+                tem2 = max(sigmagfm(i), betaw)
+              endif
+              ptem = tem / (tem2 * tem1)
+              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*tem2*ptem*ptem
             endif
           endif
         enddo
@@ -3529,9 +3539,13 @@ c
             if(k > 1 .and. k <= jmin(i)) then
               tem = 0.5*edto(i)*(etad(i,k-1)+etad(i,k))*xmb(i)
               tem1 = pfld(i,k) * 100. / (rd * t1(i,k))
-              sigmagfm(i) = max(sigmagfm(i), betaw)
-              ptem = tem / (sigmagfm(i) * tem1)
-              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*sigmagfm(i)*ptem*ptem
+              if(progsigma)then
+                tem2 = sigmab(i)
+              else
+                tem2 = max(sigmagfm(i), betaw)
+              endif
+              ptem = tem / (tem2 * tem1)
+              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*tem2*ptem*ptem
             endif
           endif
         enddo
