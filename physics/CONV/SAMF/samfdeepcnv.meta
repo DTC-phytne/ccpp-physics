@@ -55,6 +55,13 @@
   dimensions = ()
   type = integer
   intent = in
+[kdt]
+  standard_name = index_of_timestep
+  long_name = current forecast iteration
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [first_time_step]
   standard_name = flag_for_first_timestep
   long_name = flag for first time step for time integration loop (cold/warmstart)
@@ -419,6 +426,7 @@
   type = real
   kind = kind_phys
   intent = out
+  optional = True
 [dd_mf]
   standard_name = instantaneous_atmosphere_downdraft_convective_mass_flux
   long_name = (downdraft mass flux) * delt
@@ -432,6 +440,22 @@
   long_name = (detrainment mass flux) * delt
   units = kg m-2
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[w_out]
+  standard_name = diagnostic_output_w
+  long_name = diagnostic output	w
+  units = m s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[w_2dout]
+  standard_name = diagnostic_2D_output_w
+  long_name = diagnostic 2D output w
+  units = m s-1
+  dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
   intent = out

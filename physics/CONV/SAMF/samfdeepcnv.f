@@ -73,14 +73,14 @@
 !!  -# For the "feedback control", calculate updated values of the state variables by multiplying the cloud base mass flux and the tendencies calculated per unit cloud base mass flux from the static control.
 !!
 !!  \section samfdeep_detailed GFS samfdeepcnv Detailed Algorithm
-      subroutine samfdeepcnv_run (im,km,first_time_step,restart,        &
+      subroutine samfdeepcnv_run (im,km,kdt,first_time_step,restart,    &
      &    tmf,qmicro,itc,ntc,cliq,cp,cvap,                              &
      &    eps,epsm1,fv,grav,hvap,rd,rv,                                 &
      &    t0c,delt,ntk,ntr,delp,                                        &
      &    prslp,psp,phil,tkeh,qtr,prevsq,q,q1,t1,u1,v1,fscav,           &
      &    hwrf_samfdeep,progsigma,progomega,cldwrk,rn,kbot,ktop,kcnv,   &
      &    islimsk,garea,dot,ncloud,hpbl,ud_mf,dd_mf,dt_mf,cnvw,cnvc,    &
-     &    QLCN, QICN, w_upi, cf_upi, CNV_MFD,                           &
+     &    QLCN, QICN, w_upi, cf_upi, CNV_MFD,w_out,w_2dout,             &
      &    CNV_DQLDT,CLCN,CNV_FICE,CNV_NDROP,CNV_NICE,mp_phys,mp_phys_mg,&
      &    clam,c0s,c1,betal,betas,evef,pgcon,asolfac,                   &
      &    do_ca, ca_closure, ca_entr, ca_trigger, nthresh,ca_deep,      &
@@ -93,7 +93,7 @@
 
       implicit none
 !
-      integer, intent(in)  :: im, km, itc, ntc, ntk, ntr, ncloud
+      integer, intent(in)  :: im, km, itc, ntc, ntk, ntr, ncloud, kdt
       integer, intent(in)  :: islimsk(:)
       real(kind=kind_phys), intent(in) :: cliq, cp, cvap, eps, epsm1,   &
      &   fv, grav, hvap, rd, rv, t0c
@@ -123,8 +123,8 @@
       integer, intent(out) :: kbot(:), ktop(:)
       real(kind=kind_phys), intent(out) :: cldwrk(:),                   &
      &   rn(:),                                                         &
-     &   dd_mf(:,:), dt_mf(:,:)
-      real(kind=kind_phys), intent(out) :: ud_mf(:,:)
+     &   dd_mf(:,:), dt_mf(:,:),w_out(:,:),w_2dout(:)
+      real(kind=kind_phys), intent(out), optional :: ud_mf(:,:)
       ! GJF* These variables are conditionally allocated depending on whether the
       !     Morrison-Gettelman microphysics is used, so they must be declared 
       !     using assumed shape.
@@ -391,6 +391,7 @@ c
         advfac(i) = 0.
         rainevap(i) = 0.
         omegac(i)=0.
+        w_2dout(i)=0.
         gdx(i) = sqrt(garea(i))
       enddo
 
@@ -444,6 +445,7 @@ c
           ud_mf(i,k) = 0.
           dd_mf(i,k) = 0.
           dt_mf(i,k) = 0.
+          w_out(i,k) = 0.
         enddo
       enddo
       if(mp_phys == mp_phys_mg) then
@@ -1784,7 +1786,7 @@ c
       endif
 !                  
       if (progomega) then
-         call progomega_calc(first_time_step,restart,im,km,
+         call progomega_calc(first_time_step,restart,im,km,kdt,
      &        kbcon1,ktcon,omegain,delt,del,zi,cnvflg,omegaout,
      &        grav,buo,drag,wush,tentr,bb1,bb2)
          do k = 1, km
@@ -1798,7 +1800,9 @@ c
                      tem = (-omega_u(i,k)) / ((rho * grav))
                      wu2(i,k) = tem**2
                      wu2(i,k) = max(wu2(i,k), 0.)
+                     w_out(i,k) = sqrt(wu2(i,k))
                   endif
+                  w_2dout(i) = sqrt(wu2(i,kbcon1(i)+1))
               endif
             enddo
          enddo
@@ -1817,6 +1821,8 @@ c
                      ptem1 = 1. + tem
                      wu2(i,k) = (ptem + tem2) / ptem1
                      wu2(i,k) = max(wu2(i,k), 0.)
+                     w_out(i,k) = sqrt(wu2(i,k))
+                     w_2dout(i) = sqrt(wu2(i,kbcon1(i)+1))
                   endif
                endif
             enddo

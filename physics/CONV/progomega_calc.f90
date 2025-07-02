@@ -19,14 +19,15 @@
 !! used in the closure computations in the samfshalcnv. and cu_c3_shal scheme
 !!\section gen_progomega progomega_calc General Algorithm
        
-   subroutine progomega_calc(first_time_step,flag_restart,im,km,kbcon1,ktcon,omegain,delt,del, &
+   subroutine progomega_calc(first_time_step,flag_restart,im,km,kdt,kbcon1,ktcon,omegain,delt,del, &
         zi,cnvflg,omegaout,grav,buo,drag,wush,tentr,bb1,bb2)
-     
+
+     use mersenne_twister, only: random_setseed, random_stat, random_number
      use machine,  only : kind_phys
      use funcphys, only : fpvs  
      implicit none
 
-     integer, intent(in)  :: im, km
+     integer, intent(in)  :: im, km, kdt
      integer, intent(in)  :: kbcon1(im),ktcon(im)
      real(kind=kind_phys), intent(in)  :: delt,grav,bb1,bb2
      real(kind=kind_phys), intent(in)  :: omegain(im,km), del(im,km),zi(im,km)
@@ -35,16 +36,31 @@
      logical, intent(in)               :: cnvflg(im),first_time_step,flag_restart
      real(kind=kind_phys) :: termA(im,km),termB(im,km),termC(im,km),omega(im,km)
      real(kind=kind_phys) :: RHS(im,km),Kd(im,km)
+     real(kind=kind_phys) :: rand2d(im),stoch_scale(im)
      real(kind=kind_phys) :: dp,dz,entrn,Kdn,discr,wush_pa,lbb1,lbb2,lbb3
-     integer              :: i,k
-
+     real(kind=kind_phys) :: tmp(1),sigma_noise,buo_norm,center_shift
+     integer              :: i,k,kbase
+     integer              :: ipseed(im)
+     type (random_stat)   :: stat          ! for thread safe random generator
      entrn = 0.8E-4 !0.5E-4 !m^-1
      Kdn   = 0.5E-4 !2.9E-4 !m^-1
-     lbb1  = 0.5 !1.0 
-     lbb2  = 3.2 !3.0
-     lbb3  = 0.5 !0.5
+     sigma_noise = 2.0
+    
+     do i = 1, im
+        call random_setseed(10000 + i + 1000 * kdt, stat)
+        call random_number(tmp, stat)
+        rand2d(i) = tmp(1)
+     end do
+
+     do i = 1, im
+        if(rand2d(i) > 0.97)then !capture tail of distribution
+           stoch_scale(i) = 1.0 + sigma_noise * (rand2d(i) - 0.5)
+        else
+           stoch_scale(i) = 1.0
+        endif
+     enddo
      
-     
+
      !Initialization 2D
      do k = 1,km
         do i = 1,im
@@ -76,8 +92,14 @@
      do k = 2, km
         do i = 1, im
            if (cnvflg(i)) then
-              if (k > kbcon1(i) .and. k < ktcon(i)) then
+              if (k >= kbcon1(i) .and. k < ktcon(i)) then
 
+                 buo_norm  = MIN(1.0, MAX(0.0, (buo(i,k) - 0.001) / (0.015 - 0.001)))
+
+                 lbb1  = 0.5 + 0.5 * buo_norm       ! drag term ? [0.5, 1.0]
+                 lbb2  = 3.0 - 0.5 * buo_norm       ! buoyancy multiplier ? [2.5, 3.0]
+                 lbb3  = 0.5 + 0.5 * buo_norm       ! shear damping ? [0.5, 1.0]
+                 
                  ! Aerodynamic drag parameter
                  Kd(i,k) = (tentr(i,k)/entrn)*Kdn
 
@@ -93,20 +115,21 @@
                  !Coefficients for the quadratic equation
                  termA(i,k) = delt * ((lbb1 * drag(i,k) * (dp/dz)) + (Kd(i,k) * (dp/dz)))
                  termB(i,k) = -1.0 - delt * lbb3 * wush(i,k) * dp/dz
-                 termC(i,k) = omega(i,k) - delt * lbb2 * buo(i,k) * (dp/dz) &
+                 termC(i,k) = omega(i,k) - delt * lbb2 * buo(i,k) * stoch_scale(i) * (dp/dz) &
                       - delt * omega(i,k) * (omega(i,k-1) - omega(i,k)) / dp
+
                  !Compute the discriminant
                  discr = termB(i,k)**2 - 4.0 * termA(i,k) * termC(i,k)
 
                  ! Check if discriminant is non-negative
                  if (discr >= 0.0) then
-                 ! Solve quadratic equation, take the negative root
-                 omegaout(i,k) = (-termB(i,k) - sqrt(discr)) / (2.0 * termA(i,k))
+                    ! Solve quadratic equation, take the negative root
+                    omegaout(i,k) = (-termB(i,k) - sqrt(discr)) / (2.0 * termA(i,k))
                  else
-                 omegaout(i,k) = omega(i,k)
+                    omegaout(i,k) = omega(i,k)
                  endif
 
-                 omegaout(i,k) = MAX(MIN(omegaout(i,k), -1.2), -80.0)
+                 omegaout(i,k) = MAX(MIN(omegaout(i,k), -0.5), -80.0) 
                 
               endif
            endif

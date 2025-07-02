@@ -50,13 +50,13 @@
 !!  -# Calculate the tendencies of the state variables (per unit cloud base mass flux) and the cloud base mass flux.
 !!  -# For the "feedback control", calculate updated values of the state variables by multiplying the cloud base mass flux and the tendencies calculated per unit cloud base mass flux from the static control.
 !!  \section det_samfshalcnv GFS samfshalcnv Detailed Algorithm
-      subroutine samfshalcnv_run(im,km,itc,ntc,cliq,cp,cvap,            &
+      subroutine samfshalcnv_run(im,km,kdt,itc,ntc,cliq,cp,cvap,        &
      &     eps,epsm1,fv,grav,hvap,rd,rv,                                &
      &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               & 
      &     tmf,qmicro,progsigma,progomega,                              &
      &     prslp,psp,phil,tkeh,qtr,prevsq,q,q1,t1,u1,v1,fscav,          &
      &     rn,kbot,ktop,kcnv,islimsk,garea,                             &
-     &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,                       &
+     &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,w_out,w_2dout,         &
      &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                & 
      &     sigmain,sigmaout,omegain,omegaout,betadcu,betamcu,betascu,   &
      &     errmsg,errflg)
@@ -66,7 +66,7 @@
 
       implicit none
 !
-      integer, intent(in)  :: im, km, itc, ntc, ntk, ntr, ncloud
+      integer, intent(in)  :: im, km, itc, ntc, ntk, ntr, ncloud, kdt
       integer, intent(in)  :: islimsk(:)
       real(kind=kind_phys), intent(in) :: cliq, cp, cvap,               &
      &   eps, epsm1, fv, grav, hvap, rd, rv, t0c, betascu, betadcu,     &
@@ -88,12 +88,11 @@
 !
       integer, intent(out) :: kbot(:), ktop(:)
       real(kind=kind_phys), intent(out) :: rn(:),                       &
-     &   cnvw(:,:), cnvc(:,:), dt_mf(:,:)
+     &   cnvw(:,:), cnvc(:,:), dt_mf(:,:), w_out(:,:), w_2dout(:)
 !
-      real(kind=kind_phys), intent(out) :: ud_mf(:,:)
+      real(kind=kind_phys), intent(out), optional :: ud_mf(:,:)        
       real(kind=kind_phys), intent(inout), optional :: sigmaout(:,:),   &
      &   omegaout(:,:)
-
       real(kind=kind_phys), intent(in) :: clam,    c0s,     c1,         &
      &                     asolfac, evef, pgcon
       logical,          intent(in)  :: hwrf_samfshal,first_time_step,   &
@@ -351,6 +350,7 @@ c
 !       vshear(i) = 0.
         gdx(i) = sqrt(garea(i))
         xmb(i) = 0.
+        w_2dout(i) = 0.
        enddo
       endif
 !!      
@@ -405,6 +405,7 @@ c
         do i = 1, im
           ud_mf(i,k) = 0.
           dt_mf(i,k) = 0.
+          w_out(i,k) = 0.
         enddo
       enddo
 c
@@ -1516,7 +1517,7 @@ c
       endif
 !
       if (progomega) then
-         call progomega_calc(first_time_step,restart,im,km,
+         call progomega_calc(first_time_step,restart,im,km,kdt,
      &        kbcon1,ktcon,omegain,delt,del,zi,cnvflg,omegaout,
      &        grav,buo,drag,wush,xlamue,bb1,bb2)
          do k = 1, km
@@ -1530,6 +1531,8 @@ c
                      tem = (-omega_u(i,k)) / ((rho * grav))
                      wu2(i,k) = tem**2
                      wu2(i,k) = max(wu2(i,k), 0.)
+                     w_out(i,k) = sqrt(wu2(i,k))
+                     w_2dout(i) = sqrt(wu2(i,kbcon1(i)+1))
                   endif
                endif
             enddo
@@ -1550,6 +1553,8 @@ c
                      ptem1 = 1. + tem
                      wu2(i,k) = (ptem + tem2) / ptem1
                      wu2(i,k) = max(wu2(i,k), 0.)
+                     w_out(i,k) = sqrt(wu2(i,k))
+                     w_2dout(i) = sqrt(wu2(i,kbcon1(i)+1))
                   endif
                endif
             enddo

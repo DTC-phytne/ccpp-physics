@@ -604,6 +604,9 @@
                      call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%hpbl'            , Tbd%hpbl)
                      if(Model%imfdeepcnv>0 .or. Model%imfshalcnv>0) then
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%ud_mf'         , Tbd%ud_mf)
+                       !mzhang
+                       call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%w_out'         , Tbd%w_out)
+                       call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%w_2dout'       , Tbd%w_2dout)
                      endif
                      if (Model%do_sppt) then
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%dtdtnp'        , Tbd%dtdtnp)
